@@ -1,12 +1,16 @@
+import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Loader2, Box } from 'lucide-react'
 import { useLDrawModel } from '@/hooks/useLDrawModel'
 import { useBuildSteps } from '@/hooks/useBuildSteps'
+import { usePartThumbnails } from '@/hooks/usePartThumbnails'
 import { getModelUrl, MODEL_CATALOG } from '@/services/ldraw'
+import { getStepParts } from '@/utils/ldraw-helpers'
 import { ViewerCanvas } from './ViewerCanvas'
 import { LDrawModel } from './LDrawModel'
 import { InstructionCamera } from './InstructionCamera'
 import { ViewerOverlay } from './ViewerOverlay'
+import { StepPartsList } from './StepPartsList'
 
 export function InstructionViewer() {
   const [searchParams] = useSearchParams()
@@ -20,6 +24,12 @@ export function InstructionViewer() {
     model,
     numBuildingSteps,
   )
+
+  const stepParts = useMemo(
+    () => (model ? getStepParts(model, currentStep) : []),
+    [model, currentStep],
+  )
+  const thumbnails = usePartThumbnails(stepParts)
 
   if (!setId) {
     return (
@@ -62,6 +72,7 @@ export function InstructionViewer() {
           </>
         )}
       </ViewerCanvas>
+      {model && totalSteps > 0 && <StepPartsList parts={stepParts} thumbnails={thumbnails} />}
       {model && totalSteps > 0 && (
         <ViewerOverlay
           currentStep={currentStep}

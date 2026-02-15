@@ -91,6 +91,67 @@ export function highlightCurrentStep(group: Group, currentStep: number, ghost: b
   })
 }
 
+/** Part entry for a single step's parts list */
+export interface StepPart {
+  partId: string    // e.g., "3023"
+  colorCode: string // e.g., "7"
+  colorHex: string  // e.g., "#1b2a34"
+  quantity: number
+  object: Object3D  // reference to one instance of this part in the model tree
+}
+
+/**
+ * Get the list of parts introduced at a specific building step.
+ *
+ * LDrawLoader nests parts as: root → .ldr sub-model → .dat brick → sub-parts.
+ * A top-level brick is a .dat Group whose parent is either an .ldr sub-model
+ * or has a different buildingStep. Sub-parts (nested .dat inside .dat) share
+ * the same step as their parent .dat and should be excluded.
+ */
+export function getStepParts(group: Group, step: number): StepPart[] {
+  const counts = new Map<string, StepPart>()
+
+  group.traverse((child: Object3D) => {
+    if (child.userData.buildingStep !== step) return
+
+    // Only include .dat files (actual brick parts)
+    const fileName: string | undefined = child.userData.fileName
+    if (!fileName || !fileName.toLowerCase().endsWith('.dat')) return
+
+    // Entry-point check: skip sub-parts nested inside another .dat part
+    const parentFileName: string | undefined = child.parent?.userData.fileName
+    if (parentFileName?.toLowerCase().endsWith('.dat')) return
+
+    const colorCode: string = child.userData.colorCode ?? '0'
+
+    // Extract color hex from the first mesh child's material
+    let colorHex = '#888888'
+    child.traverse((descendant: Object3D) => {
+      if (colorHex !== '#888888') return
+      if (descendant instanceof Mesh && descendant.material) {
+        const mat = Array.isArray(descendant.material) ? descendant.material[0] : descendant.material
+        if (mat?.color) {
+          colorHex = '#' + mat.color.getHexString()
+        }
+      }
+    })
+
+    // Strip path and extension for display: "3023.dat" → "3023"
+    const partId = fileName.replace(/^.*[\\/]/, '').replace(/\.dat$/i, '')
+    const key = `${partId}:${colorCode}`
+
+    const existing = counts.get(key)
+    if (existing) {
+      existing.quantity++
+    } else {
+      counts.set(key, { partId, colorCode, colorHex, quantity: 1, object: child })
+    }
+  })
+
+  // Sort by quantity descending
+  return Array.from(counts.values()).sort((a, b) => b.quantity - a.quantity)
+}
+
 /** Get the bounding box radius of the model (for camera distance) */
 export function getModelRadius(group: Group): number {
   const box = new Box3().setFromObject(group)
